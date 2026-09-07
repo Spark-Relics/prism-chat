@@ -6,6 +6,7 @@ import {
   type AdapterContext,
   type ChannelAdapter,
   type ContentBlock,
+  type CredentialProvider,
   type DeliveryResult,
   type PrismMessage,
   type WebhookRequest,
@@ -18,7 +19,14 @@ export interface EmailAdapterOptions {
     host: string;
     port?: number;
     secure?: boolean;
+    /** Plain SMTP login. */
     auth?: { user: string; pass: string };
+    /**
+     * OAuth2 login (e.g. Gmail): the provider supplies the access token,
+     * so external systems can plug in their own Google/Microsoft login.
+     * Takes precedence over `auth`.
+     */
+    oauth2?: { user: string; provider: CredentialProvider };
   };
   /** Verified sender address, e.g. "bot@example.com". */
   fromAddress: string;
@@ -67,12 +75,26 @@ export class EmailAdapter implements ChannelAdapter {
 
   async start(_ctx: AdapterContext): Promise<void> {
     if (this.opts.smtp) {
-      this.transporter = nodemailer.createTransport({
-        host: this.opts.smtp.host,
-        port: this.opts.smtp.port ?? 587,
-        secure: this.opts.smtp.secure ?? false,
-        auth: this.opts.smtp.auth,
-      });
+      const { oauth2, auth, ...rest } = this.opts.smtp;
+      if (oauth2) {
+        // Fresh OAuth2 token per send; nodemailer reads it via the pool.
+        this.transporter = nodemailer.createTransport({
+          ...rest,
+          pool: true,
+          auth: {
+            type: "OAuth2",
+            user: oauth2.user,
+            async accessToken() {
+              return oauth2.provider.get().then((c) => {
+                if (!c.accessToken) throw new Error("oauth2 credential provider returned no accessToken");
+                return c.accessToken;
+              });
+            },
+          },
+        });
+      } else {
+        this.transporter = nodemailer.createTransport({ ...rest, auth });
+      }
     }
   }
 

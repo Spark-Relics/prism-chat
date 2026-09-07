@@ -5,14 +5,22 @@ import {
   type AdapterCapabilities,
   type AdapterContext,
   type ChannelAdapter,
+  type CredentialManager,
+  type CredentialProvider,
   type DeliveryResult,
   type PrismMessage,
   type WebhookRequest,
+  credentialManager,
   deterministicId,
 } from "@prism/core";
 
 export interface LineAdapterOptions {
-  channelAccessToken: string;
+  /**
+   * Channel access token, or a credential provider for externally managed
+   * login/refresh (e.g. OAuthCredentialProvider against
+   * https://api.line.me/v2/oauth/accessToken).
+   */
+  channelAccessToken: string | CredentialProvider;
   channelSecret: string;
 }
 
@@ -45,6 +53,7 @@ export class LineAdapter implements ChannelAdapter {
   readonly displayName = "LINE";
   readonly requiredConfigKeys = ["channelAccessToken", "channelSecret"] as const;
 
+  private readonly credentials: CredentialManager;
   private readonly opts: LineAdapterOptions;
 
   constructor(opts: LineAdapterOptions) {
@@ -52,6 +61,7 @@ export class LineAdapter implements ChannelAdapter {
       throw new ConfigurationError("LINE adapter requires channelAccessToken and channelSecret.");
     }
     this.opts = opts;
+    this.credentials = credentialManager(opts.channelAccessToken);
   }
 
   capabilities(): AdapterCapabilities {
@@ -69,14 +79,23 @@ export class LineAdapter implements ChannelAdapter {
   async send(message: PrismMessage): Promise<DeliveryResult> {
     const blocks = message.content.map(toLineMessage).filter(Boolean) as LineSendMessage[];
     if (blocks.length === 0) return { status: "failed", error: new Error("empty content") };
-    const res = await fetch("https://api.line.me/v2/bot/message/push", {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${this.opts.channelAccessToken}`,
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({ to: message.to, messages: blocks.slice(0, 5) }),
-    });
+    const doFetch = async (): Promise<Response> => {
+      const token = await this.credentials.getBearerToken();
+      return fetch("https://api.line.me/v2/bot/message/push", {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${token}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ to: message.to, messages: blocks.slice(0, 5) }),
+      });
+    };
+    let res = await doFetch();
+    // Stale token? Invalidate once and retry with a fresh login.
+    if (res.status === 401 || res.status === 403) {
+      this.credentials.invalidate();
+      res = await doFetch();
+    }
     if (!res.ok) {
       const retryable = res.status >= 500 || res.status === 429;
       throw new PrismError(

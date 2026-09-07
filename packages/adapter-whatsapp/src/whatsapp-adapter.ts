@@ -4,16 +4,24 @@ import {
   type AdapterCapabilities,
   type AdapterContext,
   type ChannelAdapter,
+  type CredentialManager,
+  type CredentialProvider,
   type DeliveryResult,
   type PrismMessage,
   type WebhookRequest,
+  credentialManager,
   deterministicId,
 } from "@prism/core";
 
 export interface WhatsAppAdapterOptions {
   /** Meta app credentials (Cloud API). */
   phoneNumberId: string;
-  accessToken: string;
+  /**
+   * System-user access token, or a credential provider for externally
+   * managed login/refresh (e.g. OAuthCredentialProvider against
+   * https://graph.facebook.com/oauth/access_token).
+   */
+  accessToken: string | CredentialProvider;
   /** v21.0 by default. */
   apiVersion?: string;
   /**
@@ -37,6 +45,7 @@ export class WhatsAppAdapter implements ChannelAdapter {
 
   private readonly opts: WhatsAppAdapterOptions;
   private readonly apiBase: string;
+  private readonly credentials: CredentialManager;
 
   constructor(opts: WhatsAppAdapterOptions) {
     if (!opts.phoneNumberId || !opts.accessToken) {
@@ -44,6 +53,7 @@ export class WhatsAppAdapter implements ChannelAdapter {
     }
     this.opts = opts;
     this.apiBase = `https://graph.facebook.com/${opts.apiVersion ?? "v21.0"}`;
+    this.credentials = credentialManager(opts.accessToken);
   }
 
   capabilities(): AdapterCapabilities {
@@ -64,14 +74,23 @@ export class WhatsAppAdapter implements ChannelAdapter {
     const first = message.content[0];
     if (!first) return { status: "failed", error: new Error("empty content") };
     const payload = this.blockToPayload(message.to, first);
-    const res = await fetch(`${this.apiBase}/${this.opts.phoneNumberId}/messages`, {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${this.opts.accessToken}`,
-        "content-type": "application/json",
-      },
-      body: JSON.stringify(payload),
-    });
+    const doFetch = async (): Promise<Response> => {
+      const token = await this.credentials.getBearerToken();
+      return fetch(`${this.apiBase}/${this.opts.phoneNumberId}/messages`, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${token}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+    };
+    let res = await doFetch();
+    // Stale token? Invalidate once and retry with a fresh login.
+    if (res.status === 401 || res.status === 403) {
+      this.credentials.invalidate();
+      res = await doFetch();
+    }
     if (!res.ok) {
       const retryable = res.status >= 500 || res.status === 429;
       throw new PrismError(
@@ -180,7 +199,7 @@ function parseWaMessage(m: Record<string, unknown>): PrismMessage | null {
     case "audio":
       content.push({
         type,
-        url: str((m[type] as Record<string, unknown> | undefined)?.id ?? "",
+        url: str((m[type] as Record<string, unknown> | undefined)?.id) ?? "",
       } as PrismMessage["content"][number]);
       break;
     case "document": {

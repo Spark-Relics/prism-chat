@@ -39,6 +39,81 @@ await prism.start();
 
 Telegram polling 模式下，给机器人发消息即可看到全链路。Email 入站需配 SendGrid Inbound Parse / Postmark inbound webhook 指向网关（见下）。
 
+### 需要登录/会过期的凭证（LINE / WhatsApp / Gmail OAuth 等）
+
+静态 token 会过期。凡是官方要求"登录获取"的凭证，都可以传入 `CredentialProvider`，由你的外部系统实现登录逻辑，Prism 负责缓存、过期刷新和 401 自动重登：
+
+```ts
+import { createPrism, OAuthCredentialProvider, text } from "@prism/sdk";
+
+const prism = createPrism({
+  channels: {
+    line: {
+      // 字符串（原样保留）或凭证提供者二选一
+      channelAccessToken: new OAuthCredentialProvider({
+        tokenUrl: "https://api.line.me/v2/oauth/accessToken",
+        clientId: process.env.LINE_CHANNEL_ID!,
+        clientSecret: process.env.LINE_CHANNEL_SECRET!,
+        // LINE 的响应是 query-string 形式，需要自定义解析
+        parseResponse: (body) => {
+          const b = body as { access_token?: string; expires_in?: string };
+          return {
+            accessToken: b.access_token,
+            ...(b.expires_in
+              ? { expiresAt: Date.now() + Number(b.expires_in) * 1000 }
+              : {}),
+          };
+        },
+      }),
+      channelSecret: process.env.LINE_CHANNEL_SECRET!,
+    },
+    whatsapp: {
+      phoneNumberId: "123456789",
+      accessToken: new OAuthCredentialProvider({
+        tokenUrl: "https://graph.facebook.com/oauth/access_token",
+        clientId: process.env.META_APP_ID!,
+        clientSecret: process.env.META_APP_SECRET!,
+      }),
+    },
+    email: {
+      fromAddress: "bot@your-gmail-workspace.com",
+      smtp: {
+        host: "smtp.gmail.com",
+        port: 465,
+        secure: true,
+        oauth2: {
+          user: "bot@your-gmail-workspace.com",
+          provider: new OAuthCredentialProvider({
+            tokenUrl: "https://oauth2.googleapis.com/token",
+            clientId: process.env.GOOGLE_CLIENT_ID!,
+            clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+            extraParams: { refresh_token: process.env.GOOGLE_REFRESH_TOKEN! },
+          }),
+        },
+      },
+    },
+  },
+});
+```
+
+自定义登录（SSO、浏览器跳转拿 token、密钥管理服务……）只需实现接口：
+
+```ts
+import type { CredentialProvider } from "@prism/sdk";
+
+const myLogin: CredentialProvider = {
+  async get() {
+    /* 返回缓存的 { accessToken, expiresAt } */
+  },
+  async refresh() {
+    /* 执行真正的登录，返回新凭证 */
+  },
+  isFresh(c) {
+    return !!c.accessToken && (c.expiresAt ?? Infinity) - Date.now() > 30_000;
+  },
+};
+```
+
 ## 2. 独立网关（@prism/server）
 
 ```bash

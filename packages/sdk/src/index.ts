@@ -11,10 +11,7 @@
 import {
   PrismHub,
   type ChannelAdapter,
-  type InboundHandler,
-  type OutboundMessage,
   type PrismHubOptions,
-  type PrismMessage,
 } from "@prism/core";
 import { TelegramAdapter } from "@prism/adapter-telegram";
 import type { TelegramAdapterOptions } from "@prism/adapter-telegram";
@@ -63,11 +60,11 @@ export interface CreatePrismOptions extends PrismHubOptions {
   adapters?: ChannelAdapter[];
 }
 
-export interface Prism extends PrismHub {
-  /** Convenience alias of onMessage. */
-  use(handler: InboundHandler): () => void;
-  send(message: OutboundMessage): Promise<{ status: string }>;
-}
+/**
+ * The hub instance returned by {@link createPrism}. Extends PrismHub; see
+ * PrismHub for the full API surface (send / onMessage / handleWebhook / ...).
+ */
+export type Prism = PrismHub;
 
 export function createPrism(opts: CreatePrismOptions = {}): Prism {
   const { channels, adapters, ...hubOptions } = opts;

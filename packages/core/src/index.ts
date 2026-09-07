@@ -7,6 +7,7 @@ export * from "./ids.js";
 export * from "./queue.js";
 export * from "./memory-queue.js";
 export * from "./dedupe.js";
+export * from "./credentials.js";
 export { PrismHub } from "./hub.js";
 export type {
   PrismHubOptions,
