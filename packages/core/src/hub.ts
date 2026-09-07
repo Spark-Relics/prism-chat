@@ -43,7 +43,8 @@ export interface DeadLetterEntry {
  */
 export class PrismHub extends EventEmitter {
   private readonly adapters = new Map<string, ChannelAdapter>();
-  private readonly logger: Logger;
+  /** Shared logger; public so gateway/SDK code can reuse it. */
+  readonly logger: Logger;
   private readonly queue: OutboxQueue;
   private readonly memoryQueue: MemoryOutboxQueue | null;
   private readonly maxAttempts: number;

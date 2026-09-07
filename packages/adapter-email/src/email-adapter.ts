@@ -77,10 +77,11 @@ export class EmailAdapter implements ChannelAdapter {
     if (this.opts.smtp) {
       const { oauth2, auth, ...rest } = this.opts.smtp;
       if (oauth2) {
-        // Fresh OAuth2 token per send; nodemailer reads it via the pool.
+        // Fresh OAuth2 token per send: nodemailer calls accessToken() lazily.
+        // The async accessToken() shape is valid at runtime but not covered
+        // by @types/nodemailer, hence the assertion below.
         this.transporter = nodemailer.createTransport({
           ...rest,
-          pool: true,
           auth: {
             type: "OAuth2",
             user: oauth2.user,
@@ -91,7 +92,7 @@ export class EmailAdapter implements ChannelAdapter {
               });
             },
           },
-        });
+        } as Parameters<typeof nodemailer.createTransport>[0]);
       } else {
         this.transporter = nodemailer.createTransport({ ...rest, auth });
       }
@@ -212,11 +213,13 @@ function parseSendgrid(b: Record<string, unknown>): PrismMessage | null {
 }
 
 function parsePostmark(b: Record<string, unknown>): PrismMessage | null {
-  const from = str(b.FromFull?.Email ?? b.From);
+  const fromFull = b.FromFull as { Email?: string } | undefined;
+  const toFull = b.ToFull as Array<{ Email?: string }> | undefined;
+  const from = str(fromFull?.Email ?? b.From);
   if (!from) return null;
   return buildInboundEmail({
     from,
-    to: str(b.ToFull?.[0]?.Email ?? b.To) ?? "",
+    to: str(toFull?.[0]?.Email ?? b.To) ?? "",
     subject: str(b.Subject) ?? "(no subject)",
     text: str(b.TextBody) ?? "",
     html: str(b.HtmlBody) || undefined,

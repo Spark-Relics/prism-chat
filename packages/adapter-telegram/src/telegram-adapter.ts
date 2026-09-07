@@ -218,6 +218,7 @@ export class TelegramAdapter implements ChannelAdapter {
 
   private pollLoop(): void {
     if (this.stopped || !this.ctx) return;
+    const ctx = this.ctx;
     this.polling = true;
     void (async () => {
       while (!this.stopped) {
@@ -226,7 +227,7 @@ export class TelegramAdapter implements ChannelAdapter {
         for (const u of updates) {
           this.offset = u.update_id + 1;
           const messages = updateToMessages(u);
-          if (messages.length > 0) this.ctx.dispatchInbound(messages);
+          if (messages.length > 0) ctx.dispatchInbound(messages);
         }
         if (updates.length === 0 && this.opts.pollIntervalSec) {
           await sleep(this.opts.pollIntervalSec * 1000);
@@ -257,7 +258,7 @@ export function tgMessageToPrism(m: TgMessage, updateId: number): PrismMessage |
   if (m.text) content.push({ type: "text", text: m.text });
   if (m.photo && m.photo.length > 0) {
     const best = m.photo[m.photo.length - 1];
-    content.push({ type: "image", url: best.file_id, caption: m.caption });
+    if (best) content.push({ type: "image", url: best.file_id, caption: m.caption });
   }
   if (m.audio) content.push({ type: "audio", url: m.audio.file_id, durationSec: m.audio.duration });
   if (m.voice) content.push({ type: "audio", url: m.voice.file_id, durationSec: m.voice.duration });
