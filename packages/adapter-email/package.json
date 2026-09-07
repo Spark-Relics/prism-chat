@@ -1,0 +1,29 @@
+{
+  "name": "@prism/adapter-email",
+  "version": "0.1.0",
+  "description": "Prism channel adapter for email: SMTP outbound + inbound webhook parsing (SendGrid/Postmark/Mailgun style).",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "node -e \"fs.rmSync('dist',{force:true,recursive:true})\"",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@prism/core": "workspace:*",
+    "nodemailer": "^6.9.13"
+  },
+  "devDependencies": {
+    "@types/nodemailer": "^6.4.15",
+    "typescript": "^5.5.0"
+  }
+}

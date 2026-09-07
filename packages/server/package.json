@@ -1,0 +1,33 @@
+{
+  "name": "@prism/server",
+  "version": "0.1.0",
+  "description": "Prism standalone gateway — unified webhook ingress and HTTP send API on top of @prism/core.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": { "prism-server": "./dist/cli.js" },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "node -e \"fs.rmSync('dist',{force:true,recursive:true})\"",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@prism/core": "workspace:*",
+    "@prism/adapter-telegram": "workspace:*",
+    "@prism/adapter-email": "workspace:*",
+    "@prism/adapter-whatsapp": "workspace:*",
+    "@prism/adapter-line": "workspace:*",
+    "fastify": "^4.26.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0"
+  }
+}

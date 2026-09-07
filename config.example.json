@@ -1,0 +1,34 @@
+{
+  "channels": {
+    "telegram": {
+      "botToken": "123456:ABC-DEF...",
+      "mode": "webhook",
+      "webhookUrl": "https://your-domain.com/hooks/telegram",
+      "secretToken": "random-secret-shared-with-telegram"
+    },
+    "email": {
+      "fromAddress": "bot@example.com",
+      "fromName": "Prism Bot",
+      "smtp": {
+        "host": "smtp.example.com",
+        "port": 465,
+        "secure": true,
+        "auth": { "user": "smtp-user", "pass": "smtp-pass" }
+      },
+      "inboundProvider": "postmark"
+    },
+    "whatsapp": {
+      "phoneNumberId": "123456789",
+      "accessToken": "EAAG...",
+      "verifyToken": "whatsapp-verify-token",
+      "apiVersion": "v21.0"
+    },
+    "line": {
+      "channelAccessToken": "line-channel-access-token",
+      "channelSecret": "line-channel-secret"
+    }
+  },
+  "port": 3000,
+  "forwardUrl": "https://your-business-service.example.com/prism/inbound",
+  "apiToken": "bearer-token-for-api-and-forward"
+}

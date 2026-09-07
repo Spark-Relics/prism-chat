@@ -1,0 +1,34 @@
+{
+  "name": "prism-chat",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Prism — a channel-agnostic messaging hub SDK. Unify Telegram / WhatsApp / LINE / Email and more behind one message model.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=18.17"
+  },
+  "scripts": {
+    "build": "pnpm -r run build",
+    "clean": "pnpm -r run clean",
+    "typecheck": "pnpm -r run typecheck"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Spark-Relics/prism-chat.git"
+  },
+  "keywords": [
+    "messaging",
+    "chat",
+    "telegram",
+    "whatsapp",
+    "line",
+    "email",
+    "sdk",
+    "webhook",
+    "chatbot"
+  ],
+  "devDependencies": {
+    "@types/node": "^26.4.1"
+  }
+}
