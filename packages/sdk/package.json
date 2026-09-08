@@ -23,7 +23,8 @@
     "@prism/adapter-telegram": "workspace:*",
     "@prism/adapter-email": "workspace:*",
     "@prism/adapter-whatsapp": "workspace:*",
-    "@prism/adapter-line": "workspace:*"
+    "@prism/adapter-line": "workspace:*",
+    "@prism/adapter-telegram-user": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.5.0"

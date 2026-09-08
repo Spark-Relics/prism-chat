@@ -21,6 +21,8 @@ import { WhatsAppAdapter } from "@prism/adapter-whatsapp";
 import type { WhatsAppAdapterOptions } from "@prism/adapter-whatsapp";
 import { LineAdapter } from "@prism/adapter-line";
 import type { LineAdapterOptions } from "@prism/adapter-line";
+import { TelegramUserAdapter } from "@prism/adapter-telegram-user";
+import type { TelegramUserAdapterOptions } from "@prism/adapter-telegram-user";
 
 export * from "@prism/core";
 
@@ -33,6 +35,7 @@ const registry = new Map<string, PluginFactory>([
   ["email", (o) => new EmailAdapter(o as EmailAdapterOptions)],
   ["whatsapp", (o) => new WhatsAppAdapter(o as WhatsAppAdapterOptions)],
   ["line", (o) => new LineAdapter(o as LineAdapterOptions)],
+  ["telegram-user", (o) => new TelegramUserAdapter(o as TelegramUserAdapterOptions)],
 ]);
 
 /** Register or replace a channel plugin factory (for new platforms). */

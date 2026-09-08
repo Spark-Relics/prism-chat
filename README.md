@@ -43,6 +43,7 @@ await prism.start();
 | [`@prism/sdk`](./packages/sdk) | 一行创建中枢 + 插件注册表（聚合全部官方适配器） |
 | [`@prism/server`](./packages/server) | 独立网关：`/hooks/:channel` 统一 webhook、`/api/send` 统一发送 |
 | [`@prism/adapter-telegram`](./packages/adapter-telegram) | Telegram Bot API（polling + webhook 双模式） |
+| [`@prism/adapter-telegram-user`](./packages/adapter-telegram-user) | Telegram 私人号 MTProto userbot（GramJS，⚠️ 违反 ToS 风险自担） |
 | [`@prism/adapter-email`](./packages/adapter-email) | SMTP 发送 + SendGrid/Postmark/Mailgun 入站解析 |
 | [`@prism/adapter-whatsapp`](./packages/adapter-whatsapp) | WhatsApp Cloud API（骨架：验签握手 + 收发） |
 | [`@prism/adapter-line`](./packages/adapter-line) | LINE Messaging API（骨架：HMAC 验签 + 收发） |
@@ -58,7 +59,7 @@ pnpm build
 
 ## 路线图
 
-- [ ] WhatsApp：媒体块、模板消息、X-Hub-Signature-256 验签
+- [x] WhatsApp：媒体块、模板消息、X-Hub-Signature-256 验签
 - [ ] LINE：replyToken 快速回复、群组、富文本菜单
 - [ ] Redis 队列 / 去重实现（多实例部署）
 - [ ] Slack、Discord、飞书、钉钉、企业微信适配器
