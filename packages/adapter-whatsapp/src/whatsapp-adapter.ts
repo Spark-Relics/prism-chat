@@ -12,6 +12,7 @@ import {
   credentialManager,
   deterministicId,
 } from "@prism/core";
+import { createHmac, timingSafeEqual } from "node:crypto";
 
 export interface WhatsAppAdapterOptions {
   /** Meta app credentials (Cloud API). */
@@ -149,12 +150,14 @@ export class WhatsAppAdapter implements ChannelAdapter {
   verifyWebhook(req: WebhookRequest): boolean {
     // GET subscription handshake: handled by the gateway before parse; here we
     // verify POST signature if appSecret configured.
-    if (this.opts.appSecret) {
-      // X-Hub-Signature-256: sha256=<hex>
-      // TODO: implement HMAC check when wiring a real deployment.
-      return true;
-    }
-    return true;
+    if (!this.opts.appSecret) return true; // not configured: accept (dev mode)
+    // X-Hub-Signature-256: sha256=<hex>
+    const header = req.headers["x-hub-signature-256"];
+    if (!header) return false;
+    const expected =
+      "sha256=" +
+      createHmac("sha256", this.opts.appSecret).update(req.rawBody, "utf8").digest("hex");
+    return safeEqualHex(expected, header);
   }
 
   parseWebhook(req: WebhookRequest): PrismMessage[] {
@@ -237,6 +240,14 @@ function parseWaMessage(m: Record<string, unknown>): PrismMessage | null {
 
 function str(v: unknown): string | undefined {
   return typeof v === "string" && v.length > 0 ? v : undefined;
+}
+
+/** Constant-time comparison of two "sha256=<hex>" signature strings. */
+function safeEqualHex(a: string, b: string): boolean {
+  const ab = Buffer.from(a, "utf8");
+  const bb = Buffer.from(b, "utf8");
+  if (ab.length !== bb.length) return false;
+  return timingSafeEqual(ab, bb);
 }
 function num(v: unknown): number | undefined {
   return typeof v === "number" ? v : typeof v === "string" && /^\d+$/.test(v) ? Number(v) : undefined;
