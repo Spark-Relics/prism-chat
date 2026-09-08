@@ -29,6 +29,14 @@ interface ChannelAdapter {
 4. **幂等 id**：入站消息 id 必须由平台事件确定性派生（`deterministicId(channel, platformEventId)`），这是去重的基础。
 5. **能力声明**：如实填写 `capabilities()`，业务层可据此做降级。
 
+## Webhook 验签
+
+`verifyWebhook` 返回 `false` 时网关直接回 401，消息不会进入管线。实现时注意：
+
+- 用 `req.rawBody`（原始字节）而不是重新序列化的 `req.body` 计算 HMAC——JSON 重序列化的键序/空白差异会导致签名不匹配。
+- 用常数时间比较（`crypto.timingSafeEqual`）防时序攻击。
+- 参考实现：`@prism/adapter-whatsapp` 的 `X-Hub-Signature-256` 校验、`@prism/adapter-telegram` 的 secret token 比对。
+
 ## 注册方式
 
 ```ts

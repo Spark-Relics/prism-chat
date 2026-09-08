@@ -74,6 +74,8 @@ const prism = createPrism({
         clientId: process.env.META_APP_ID!,
         clientSecret: process.env.META_APP_SECRET!,
       }),
+      // 入站 webhook 签名校验（X-Hub-Signature-256），强烈建议生产环境配置
+      appSecret: process.env.META_APP_SECRET!,
     },
     email: {
       fromAddress: "bot@your-gmail-workspace.com",
