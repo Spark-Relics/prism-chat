@@ -135,6 +135,8 @@ node packages/server/dist/cli.js --config config.example.json
 
 `forwardUrl` 指向你的业务服务，网关会把规范化后的 `PrismMessage` POST 过去（带 `Authorization: Bearer <apiToken>`）。
 
+> 非 Node.js 项目（Go / Java / Python / PHP / Rust…）不需要 SDK：网关 + [openapi.yaml](./openapi.yaml) 就是语言无关的标准接入方式，见 [non-node-integration.md](./non-node-integration.md)。
+
 ## 3. 下一步
 
 - 架构与设计原则：[architecture.md](./architecture.md)

@@ -54,7 +54,7 @@ pnpm install
 pnpm build
 ```
 
-详见 [快速开始](./docs/quickstart.md) · [架构](./docs/architecture.md) · [适配器开发指南](./docs/adapter-guide.md)
+详见 [快速开始](./docs/quickstart.md) · [架构](./docs/architecture.md) · [适配器开发指南](./docs/adapter-guide.md) · [API 规范 (OpenAPI)](./docs/openapi.yaml) · [非 Node 语言接入](./docs/non-node-integration.md)
 
 ## 路线图
 

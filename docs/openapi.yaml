@@ -1,0 +1,494 @@
+openapi: 3.1.0
+info:
+  title: Prism Gateway API
+  version: 0.1.0
+  description: |
+    Language-agnostic interface to a standalone Prism gateway.
+
+    Prism unifies Telegram / WhatsApp / LINE / Email (and more) behind one
+    normalized message model (`PrismMessage`). Any language that can speak
+    HTTP can integrate:
+
+    * **Outbound** — `POST /api/send` with an `OutboundMessage`.
+    * **Inbound** — the gateway verifies, normalizes and dedupes platform
+      webhooks, then POSTs the resulting `PrismMessage` to your configured
+      `forwardUrl` (with `Authorization: Bearer <apiToken>` when set).
+
+    Embed `@prism/sdk` only if you are in Node.js/TypeScript; everyone else
+    uses this API (generate a client via openapi-generator if you like).
+  license:
+    name: MIT
+servers:
+  - url: http://localhost:3000
+    description: Local gateway (default port)
+
+security: []
+
+paths:
+  /healthz:
+    get:
+      operationId: healthz
+      summary: Liveness probe
+      description: Returns gateway status and registered channel ids.
+      security: []
+      responses:
+        "200":
+          description: Gateway is up.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, channels]
+                properties:
+                  ok:
+                    type: boolean
+                    enum: [true]
+                  channels:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ChannelSummary"
+
+  /api/channels:
+    get:
+      operationId: listChannels
+      summary: Registered channels and their capabilities
+      description: |
+        Returns every registered channel with its capability declaration
+        (which content blocks it can send/receive, and feature flags).
+        Use this to degrade gracefully per channel.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Channel list.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  allOf:
+                    - $ref: "#/components/schemas/ChannelSummary"
+                    - type: object
+                      required: [capabilities]
+                      properties:
+                        capabilities:
+                          $ref: "#/components/schemas/AdapterCapabilities"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/send:
+    post:
+      operationId: sendMessage
+      summary: Send a message on any channel
+      description: |
+        Unified outbound send. The gateway queues the message through the
+        outbox (dedupe by `idempotencyKey`, retry with exponential backoff,
+        dead-letter after max attempts). Responds `202` once accepted —
+        delivery is asynchronous; monitor gateway logs or events for
+        final status.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OutboundMessage"
+            examples:
+              text:
+                summary: Send a text message
+                value:
+                  channel: telegram
+                  to: "123456789"
+                  content:
+                    - type: text
+                      text: Hello from your Go service!
+              image:
+                summary: Send an image
+                value:
+                  channel: whatsapp
+                  to: "8613800000000"
+                  content:
+                    - type: image
+                      url: https://example.com/cat.png
+                      caption: a cat
+      responses:
+        "202":
+          description: Message accepted into the outbox.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeliveryResult"
+        "400":
+          description: Missing `channel`, `to` or `content[]`.
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: "channel, to and content[] required"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /hooks/{channel}:
+    post:
+      operationId: receiveWebhook
+      summary: Platform webhook ingress (configure platform callbacks here)
+      description: |
+        Point Telegram/WhatsApp/LINE/Email-provider webhooks at this
+        endpoint. The gateway verifies the signature (per-platform),
+        normalizes the payload into `PrismMessage[]`, dedupes by
+        `channel:platformMessageId`, then forwards to `forwardUrl`.
+
+        Channel names: `telegram`, `whatsapp`, `line`, `email`.
+
+        Respond as the platform expects: usually 200 with an empty body
+        (WhatsApp Cloud API), but 403 when signature verification fails.
+      security: []
+      parameters:
+        - name: channel
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [telegram, whatsapp, line, email]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Platform-native webhook payload (kept verbatim for signature verification).
+      responses:
+        "200":
+          description: Webhook accepted and processed.
+          content:
+            application/json:
+              schema:
+                type: string
+        "403":
+          description: Signature verification failed (adapter rejected the request).
+
+  /hooks/whatsapp:
+    get:
+      operationId: whatsappHandshake
+      summary: Meta subscription handshake
+      description: |
+        Meta calls this with `hub.mode=subscribe&hub.verify_token=...`
+        when you register the webhook URL. The gateway echoes
+        `hub.challenge` when the verify token matches, else 403.
+        No authorization needed — Meta must reach it.
+      security: []
+      parameters:
+        - name: hub.mode
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [subscribe]
+        - name: hub.verify_token
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: hub.challenge
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Handshake OK; body is the echoed `hub.challenge`.
+          content:
+            text/plain:
+              schema:
+                type: string
+        "403":
+          description: Verify token mismatch.
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: forbidden
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: |
+        Set `apiToken` in the gateway config. Required on `/api/*` when
+        configured; also attached to forwarded inbound messages.
+
+  responses:
+    Unauthorized:
+      description: Missing or wrong bearer token.
+      content:
+        text/plain:
+          schema:
+            type: string
+            example: unauthorized
+
+  schemas:
+    ChannelSummary:
+      type: object
+      required: [id, displayName]
+      properties:
+        id:
+          type: string
+          description: Channel id, e.g. `telegram`.
+          examples: [telegram]
+        displayName:
+          type: string
+          examples: [Telegram]
+
+    AdapterCapabilities:
+      type: object
+      required: [sendBlocks, receiveBlocks, features]
+      properties:
+        sendBlocks:
+          type: array
+          items:
+            $ref: "#/components/schemas/BlockType"
+        receiveBlocks:
+          type: array
+          items:
+            $ref: "#/components/schemas/BlockType"
+        features:
+          type: object
+          required: [webhook, receipts, interactive]
+          properties:
+            webhook:
+              type: boolean
+            receipts:
+              type: boolean
+            interactive:
+              type: boolean
+
+    BlockType:
+      type: string
+      enum: [text, image, audio, video, file, location, sticker, contact, template]
+
+    OutboundMessage:
+      type: object
+      required: [channel, to, content]
+      properties:
+        channel:
+          type: string
+          description: Target channel id.
+          examples: [telegram]
+        to:
+          type: string
+          description: Recipient in platform terms (chat id, phone number, email...).
+          examples: ["123456789"]
+        content:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/ContentBlock"
+        idempotencyKey:
+          type: string
+          description: Business idempotency key; retries with the same key are deduped.
+        metadata:
+          type: object
+          additionalProperties: true
+        options:
+          type: object
+          additionalProperties: true
+          description: Adapter-level pass-through (e.g. Telegram `parse_mode`).
+
+    PrismMessage:
+      type: object
+      required: [id, channel, direction, from, to, content, timestamp, metadata]
+      description: |
+        The normalized message envelope. This is what the gateway POSTs to
+        your `forwardUrl` — treat this schema as the cross-language
+        contract.
+      properties:
+        id:
+          type: string
+          description: |
+            Globally unique message id. For inbound messages it is derived
+            deterministically from the platform event, so platform
+            webhook redelivery does not produce new ids (dedupe happens
+            gateway-side, but the id is stable if you also dedupe).
+        channel:
+          type: string
+          examples: [telegram]
+        direction:
+          type: string
+          enum: [inbound, outbound]
+        from:
+          type: string
+          description: Sender in platform terms.
+        to:
+          type: string
+          description: Recipient in platform terms.
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/ContentBlock"
+        timestamp:
+          type: integer
+          format: int64
+          description: Unix epoch milliseconds.
+        raw:
+          description: Platform-native payload, escape hatch for exotic fields.
+        metadata:
+          type: object
+          additionalProperties: true
+          description: Adapter/business metadata (e.g. `subject` for email, `waId` for WhatsApp).
+
+    DeliveryResult:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [queued, sent, failed, retry_scheduled, dead_letter]
+        platformMessageId:
+          type: string
+          description: Platform message id once accepted.
+        error:
+          type: string
+          description: Serialized error message when status is `failed`/`dead_letter`.
+
+    ContentBlock:
+      oneOf:
+        - $ref: "#/components/schemas/TextBlock"
+        - $ref: "#/components/schemas/ImageBlock"
+        - $ref: "#/components/schemas/AudioBlock"
+        - $ref: "#/components/schemas/VideoBlock"
+        - $ref: "#/components/schemas/FileBlock"
+        - $ref: "#/components/schemas/LocationBlock"
+        - $ref: "#/components/schemas/StickerBlock"
+        - $ref: "#/components/schemas/ContactBlock"
+        - $ref: "#/components/schemas/TemplateBlock"
+      discriminator:
+        propertyName: type
+        mapping:
+          text: "#/components/schemas/TextBlock"
+          image: "#/components/schemas/ImageBlock"
+          audio: "#/components/schemas/AudioBlock"
+          video: "#/components/schemas/VideoBlock"
+          file: "#/components/schemas/FileBlock"
+          location: "#/components/schemas/LocationBlock"
+          sticker: "#/components/schemas/StickerBlock"
+          contact: "#/components/schemas/ContactBlock"
+          template: "#/components/schemas/TemplateBlock"
+
+    TextBlock:
+      type: object
+      required: [type, text]
+      properties:
+        type:
+          const: text
+        text:
+          type: string
+        format:
+          type: string
+          enum: [plain, markdown, html]
+          description: Lightweight formatting hint; adapters map or strip.
+
+    ImageBlock:
+      type: object
+      required: [type, url]
+      properties:
+        type:
+          const: image
+        url:
+          type: string
+          description: Remote URL or adapter-accepted reference (e.g. file_id).
+        caption:
+          type: string
+
+    AudioBlock:
+      type: object
+      required: [type, url]
+      properties:
+        type:
+          const: audio
+        url:
+          type: string
+        durationSec:
+          type: number
+
+    VideoBlock:
+      type: object
+      required: [type, url]
+      properties:
+        type:
+          const: video
+        url:
+          type: string
+        caption:
+          type: string
+        durationSec:
+          type: number
+
+    FileBlock:
+      type: object
+      required: [type, url]
+      properties:
+        type:
+          const: file
+        url:
+          type: string
+        filename:
+          type: string
+        mimetype:
+          type: string
+
+    LocationBlock:
+      type: object
+      required: [type, latitude, longitude]
+      properties:
+        type:
+          const: location
+        latitude:
+          type: number
+        longitude:
+          type: number
+        title:
+          type: string
+        address:
+          type: string
+
+    StickerBlock:
+      type: object
+      required: [type, id]
+      properties:
+        type:
+          const: sticker
+        id:
+          type: string
+          description: Platform sticker id or emoji.
+
+    ContactBlock:
+      type: object
+      required: [type]
+      properties:
+        type:
+          const: contact
+        name:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
+        userId:
+          type: string
+
+    TemplateBlock:
+      type: object
+      required: [type, template, params]
+      description: Structured template (buttons / quick replies / cards); adapters render to the closest native construct.
+      properties:
+        type:
+          const: template
+        template:
+          type: string
+          description: Template name/key, adapter specific.
+        params:
+          type: object
+          additionalProperties:
+            type: string
